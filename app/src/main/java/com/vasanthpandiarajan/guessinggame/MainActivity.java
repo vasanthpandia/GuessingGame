@@ -4,43 +4,45 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.Looper;
 import android.os.Message;
-import android.text.Layout;
 import android.util.Log;
 import android.view.View;
-import android.widget.ArrayAdapter;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
 public class MainActivity extends Activity {
     final int START_GAME = 1;
-    final int PLAYER1_GUESS = 2;
-    final int PLAYER2_GUESS = 3;
-    final int PLAYER1_SET_NUMBER = 4;
-    final int PLAYER2_SET_NUMBER = 5;
-    final int NEW_GUESS = 6;
-    final int PLAYER1_RESPONSE = 7;
-    final int PLAYER2_RESPONSE = 8;
-    final int GET_GUESS = 9;
-    final int MAKE_GUESS = 10;
+    final int END_GAME = 0;
+    final int PLAYER1_SET_NUMBER = 2;
+    final int PLAYER2_SET_NUMBER = 3;
+    final int PLAYER1_RESPONSE = 4;
+    final int PLAYER2_RESPONSE = 5;
+    final int GET_GUESS = 6;
+    final int MAKE_GUESS = 7;
+
+    List<Integer> digits;
 
     HandlerThread player1, player2;
     public Handler myHandler, player1Handler, player2Handler;
     final Random rnd = new Random();
     static final Object lock = new Object();
     int player1Number, player2Number, player1Guess, player2Guess, guessCount1, guessCount2;
+    String player1Response, player2Response;
     boolean player1State, player2State;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        digits = new ArrayList<>();
+        for(int i = 0; i < 10; i++){
+            digits.add(i);
+        }
 
         setContentView(R.layout.activity_main);
 
@@ -57,35 +59,8 @@ public class MainActivity extends Activity {
                         Message msg2 = player2Handler.obtainMessage(START_GAME);
                         player1Handler.sendMessage(msg1);
                         player2Handler.sendMessage(msg2);
-                        try {
-                            Thread.sleep(1000);
-                        } catch(InterruptedException e) {
-                            e.printStackTrace();
-                        }
                         player1Handler.sendEmptyMessage(MAKE_GUESS);
                         player2Handler.sendEmptyMessage(MAKE_GUESS);
-                        break;
-                    }
-                    case PLAYER1_GUESS: {
-                        Log.i("Reached Turn1", "Turn1");
-                        addTextToScrollView(R.id.scroll1_layout, ""+msg.arg1);
-                        addTextToScrollView(R.id.scroll1_layout, ""+msg.obj);
-                            try {
-                                Thread.sleep(1000);
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
-                            }
-                        break;
-                    }
-                    case PLAYER2_GUESS: {
-                            Log.i("Reached Turn2", "Turn2");
-                            addTextToScrollView(R.id.scroll2_layout, "" + msg.arg1);
-                            addTextToScrollView(R.id.scroll2_layout, "" + msg.obj);
-                            try {
-                                Thread.sleep(1000);
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
-                            }
                         break;
                     }
                     case PLAYER1_SET_NUMBER: {
@@ -94,6 +69,15 @@ public class MainActivity extends Activity {
                     }
                     case PLAYER2_SET_NUMBER: {
                         displayPlayerNumber(R.id.player2_number_field, player2Number);
+                        break;
+                    }
+                    case END_GAME: {
+                        player1.interrupt();
+                        player1.quit();
+                        player2.interrupt();
+                        player2.quit();
+                        addTextToScrollView(R.id.scroll1_layout, "The winner is Player :" + msg.arg1);
+                        addTextToScrollView(R.id.scroll2_layout, "The winner is Player :" + msg.arg1);
                         break;
                     }
                     default: {
@@ -114,6 +98,8 @@ public class MainActivity extends Activity {
                 player2 = new HandlerThread("player2");
                 player2.start();
 
+                resetView();
+
                 player1Handler = new Handler(player1.getLooper()){
                     @Override
                     public void handleMessage(Message msg) {
@@ -130,17 +116,12 @@ public class MainActivity extends Activity {
                             case GET_GUESS: {
                                 synchronized (lock) {
                                     int opponentGuess = msg.arg1;
-                                    String response = "";
-                                    if(opponentGuess != player1Guess) {
-                                        response = "Wrong Guess";
-                                    } else {
-                                        response = "Correct Guess";
-                                    }
+                                    String response = checkGuess(opponentGuess, player1Number);
                                     message = player2Handler.obtainMessage(PLAYER1_RESPONSE);
                                     message.arg1 = opponentGuess;
                                     message.obj = response;
                                     try {
-                                        Thread.sleep(1000);
+                                        Thread.sleep(500);
                                     } catch(InterruptedException e) {
                                         e.printStackTrace();
                                     }
@@ -152,11 +133,15 @@ public class MainActivity extends Activity {
                             case MAKE_GUESS: {
                                 synchronized(lock) {
                                     Log.i("Player1", "Make Guess");
+                                    if(guessCount1 >= 19) {
+                                        player1.interrupt();
+                                        player1.quit();
+                                    }
                                     message = player2Handler.obtainMessage(GET_GUESS);
-                                    player1Guess = getRandomNumber();
+                                    player1Guess = player1MakeGuess();
                                     message.arg1 = player1Guess;
                                     try {
-                                        Thread.sleep(1000);
+                                        Thread.sleep(500);
                                     } catch(InterruptedException e) {
                                         e.printStackTrace();
                                     }
@@ -166,18 +151,26 @@ public class MainActivity extends Activity {
                             }
                             case PLAYER2_RESPONSE: {
                                 synchronized (lock) {
-                                    message = myHandler.obtainMessage(PLAYER1_GUESS);
-                                    message.arg1 = player1Guess;
-                                    message.obj = msg.obj;
+                                    player2Response = "Player 1 Guessed " + player1Guess + " : Player2 responded " + msg.obj;
                                     try {
-                                        Thread.sleep(1000);
+                                        Thread.sleep(500);
                                     } catch(InterruptedException e) {
                                         e.printStackTrace();
                                     }
-                                    myHandler.sendMessage(message);
+
+                                    myHandler.post(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            MainActivity.this.addTextToScrollView(R.id.scroll1_layout, player2Response);
+                                        }
+                                    });
                                     if(msg.obj.equals("Wrong Guess")) {
                                         message = player1Handler.obtainMessage(MAKE_GUESS);
                                         player1Handler.sendMessage(message);
+                                    } else if(msg.obj.equals("Correct Guess")) {
+                                        message = myHandler.obtainMessage(END_GAME);
+                                        message.arg1 = 1;
+                                        myHandler.sendMessage(message);
                                     }
                                     break;
                                 }
@@ -201,17 +194,12 @@ public class MainActivity extends Activity {
                             case GET_GUESS: {
                                 synchronized (lock) {
                                     int opponentGuess = msg.arg1;
-                                    String response = "";
-                                    if(opponentGuess != player2Guess) {
-                                        response = "Wrong Guess";
-                                    } else {
-                                        response = "Correct Guess";
-                                    }
+                                    String response = checkGuess(opponentGuess, player2Number);
                                     message = player1Handler.obtainMessage(PLAYER2_RESPONSE);
                                     message.arg1 = opponentGuess;
                                     message.obj = response;
                                     try {
-                                        Thread.sleep(1000);
+                                        Thread.sleep(500);
                                     } catch(InterruptedException e) {
                                         e.printStackTrace();
                                     }
@@ -222,11 +210,16 @@ public class MainActivity extends Activity {
                             }
                             case MAKE_GUESS: {
                                 synchronized (lock) {
+                                    if(guessCount2 >= 19) {
+                                        player2.interrupt();
+                                        player2.quit();
+                                    }
                                     message = player1Handler.obtainMessage(GET_GUESS);
-                                    player2Guess = getRandomNumber();
+                                    player2Guess = player2MakeGuess();
+//                                    player2Guess = player1Number;
                                     message.arg1 = player2Guess;
                                     try {
-                                        Thread.sleep(1000);
+                                        Thread.sleep(500);
                                     } catch(InterruptedException e) {
                                         e.printStackTrace();
                                     }
@@ -236,18 +229,26 @@ public class MainActivity extends Activity {
                             }
                             case PLAYER1_RESPONSE: {
                                 synchronized(lock) {
-                                    message = myHandler.obtainMessage(PLAYER2_GUESS);
-                                    message.arg1 = player2Guess;
-                                    message.obj = msg.obj;
+                                    player1Response = "Player 2 Guessed " + player2Guess + " : Player1 responded " + msg.obj;
                                     try {
-                                        Thread.sleep(1000);
+                                        Thread.sleep(500);
                                     } catch(InterruptedException e) {
                                         e.printStackTrace();
                                     }
-                                    myHandler.sendMessage(message);
+
+                                    myHandler.post(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            MainActivity.this.addTextToScrollView(R.id.scroll2_layout, player1Response);
+                                        }
+                                    });
                                     if(msg.obj.equals("Wrong Guess")) {
                                         message = player2Handler.obtainMessage(MAKE_GUESS);
                                         player2Handler.sendMessage(message);
+                                    } else if(msg.obj.equals("Correct Guess")) {
+                                        message = myHandler.obtainMessage(END_GAME);
+                                        message.arg1 = 2;
+                                        myHandler.sendMessage(message);
                                     }
                                     break;
                                 }
@@ -264,14 +265,15 @@ public class MainActivity extends Activity {
     }
 
     public int getRandomNumber() {
-        int n;
-        int Low = 1000;
-        int High = 10000;
-        do {
-
-            n = rnd.nextInt(High - Low) + Low;
-        } while(containsRepeatingDigits(n));
-        return n;
+        Collections.shuffle(digits);
+        while(digits.get(0) == 0) {
+            Collections.shuffle(digits);
+        }
+        int result = 0;
+        for(int i = 3; i >= 0; i--) {
+            result += (int) (digits.get(i) * Math.pow(10, i));
+        }
+        return result;
     }
 
     public boolean containsRepeatingDigits(final int n) {
@@ -286,19 +288,53 @@ public class MainActivity extends Activity {
     }
 
     public void displayPlayerNumber(int view_id, int number) {
-        TextView playerNumber = (TextView) findViewById(view_id);
+        TextView playerNumber = findViewById(view_id);
         playerNumber.setText(""+number);
     }
 
     public void addTextToScrollView(int view_id, String displayText) {
-        LinearLayout scrollView = (LinearLayout) findViewById(view_id);
+        LinearLayout scrollView = findViewById(view_id);
         LinearLayout.LayoutParams lparams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         TextView displayTextField = new TextView(this);
         displayTextField.setLayoutParams(lparams);
         displayTextField.setText(displayText);
-        displayTextField.setTextSize(26);
+        displayTextField.setTextSize(22);
         scrollView.addView(displayTextField);
     }
 
+    public String checkGuess(int guess, int originalGuess) {
+        if(guess == originalGuess) {
+            return "Correct Guess";
+        } else {
+            return "Wrong Guess";
+        }
+    }
+
+    public int player1MakeGuess() {
+        guessCount1 ++;
+        return getRandomNumber();
+    }
+
+    public int player2MakeGuess() {
+        guessCount2 ++;
+        return getRandomNumber();
+    }
+
+    public void resetView() {
+        TextView playerNumber1 = findViewById(R.id.player1_number_field);
+        TextView playerNumber2 = findViewById(R.id.player2_number_field);
+        player1Number = -1;
+        player2Number = -1;
+        player2Guess = -1;
+        player1Guess = -1;
+        player1Response = player2Response = "";
+        guessCount1 = guessCount2 = -1;
+        LinearLayout layout1 =  findViewById(R.id.scroll1_layout);
+        layout1.removeAllViews();
+        LinearLayout layout2 =  findViewById(R.id.scroll2_layout);
+        layout2.removeAllViews();
+        playerNumber1.setText("Not Set");
+        playerNumber2.setText("Not Set");
+    }
 }
