@@ -3,6 +3,7 @@ package com.vasanthpandiarajan.guessinggame;
 import android.app.Activity;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.Message;
 import android.text.Layout;
@@ -27,9 +28,117 @@ public class MainActivity extends Activity {
     final int NEW_GUESS = 6;
 
     public Handler myHandler, player1Handler, player2Handler;
-    Thread player1, player2;
     final Random rnd = new Random();
     static final Object lock = new Object();
+
+    public Thread player1 = new TPlayer1("player1");
+    public Thread player2 = new TPlayer2("player2");
+
+    public class TPlayer1 extends HandlerThread {
+        int currentGuess1, number1;
+
+        public TPlayer1(String name) {
+            super(name);
+        }
+
+        public void onLooperPrepared() {
+            player1Handler = new Handler(getLooper()) {
+              @Override
+                public void handleMessage(Message msg) {
+                  Message message1;
+                  switch(msg.what) {
+                      case START_GAME: {
+                          message1 = player2Handler.obtainMessage(NEW_GUESS);
+                          currentGuess1 = getRandomNumber();
+                          message1.arg1 = currentGuess1;
+                          player1Handler.sendMessage(message1);
+                          break;
+                      }
+                      case NEW_GUESS: {
+                          synchronized (lock) {
+                              message1 = myHandler.obtainMessage(PLAYER1_TURN);
+                              message1.arg1 = msg.arg1;
+                              myHandler.sendMessage(message1);
+                          }
+                          break;
+                      }
+                  }
+              }
+            };
+        }
+
+
+
+        @Override
+        public void run() {
+            super.run();
+            number1 = getRandomNumber();
+            Message message = myHandler.obtainMessage(PLAYER1_SET_NUMBER);
+            message.arg1 = number1;
+            myHandler.sendMessage(message);
+
+            try {
+                Thread.sleep(800);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            currentGuess1 = getRandomNumber();
+            Message newGuessMessage = player2Handler.obtainMessage(NEW_GUESS);
+            newGuessMessage.arg1 = currentGuess1;
+            player2Handler.sendMessage(newGuessMessage);
+        }
+    }
+
+    public class TPlayer2 extends HandlerThread {
+        int currentGuess2, number2;
+
+        public TPlayer2(String name) {
+            super(name);
+        }
+
+        public void onLooperPrepared() {
+            player2Handler = new Handler(getLooper()) {
+                @Override
+                public void handleMessage(Message msg) {
+                    Message message;
+                    switch(msg.what) {
+                        case START_GAME: {
+                            message = player1Handler.obtainMessage(NEW_GUESS);
+                            currentGuess2 = getRandomNumber();
+                            message.arg1 = currentGuess2;
+                            player1Handler.sendMessage(message);
+                            myHandler.sendEmptyMessage(START_GAME);
+                            break;
+                        }
+                        case NEW_GUESS: {
+                            synchronized (lock) {
+                                message = myHandler.obtainMessage(PLAYER2_TURN);
+                                message.arg1 = msg.arg1;
+                                myHandler.sendMessage(message);
+                            }
+                            break;
+                        }
+                    }
+                }
+            };
+        }
+
+
+        public void run() {
+            super.run();
+
+            number2 = getRandomNumber();
+            Message message = myHandler.obtainMessage(PLAYER2_SET_NUMBER);
+            message.arg1 = number2;
+            myHandler.sendMessage(message);
+
+            currentGuess2 = getRandomNumber();
+            Message newGuessMessage = player1Handler.obtainMessage(NEW_GUESS);
+            newGuessMessage.arg1 = currentGuess2;
+            player1Handler.sendMessage(newGuessMessage);
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,164 +183,24 @@ public class MainActivity extends Activity {
             }
         };
 
-        player1 = new Thread(new Runnable() {
-            int number1, currentGuess1;
-            int turn1 = 0;
-            @Override
-            public void run() {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-
-                Looper.prepare();
-
-                player1Handler = new Handler() {
-                    @Override
-                    public void handleMessage(Message msg1) {
-                        Message message1;
-                        switch(msg1.what) {
-                            case START_GAME: {
-                                message1 = player2Handler.obtainMessage(NEW_GUESS);
-                                currentGuess1 = getRandomNumber();
-                                message1.arg1 = currentGuess1;
-                                player1Handler.sendMessage(message1);
-                                break;
-                            }
-                            case NEW_GUESS: {
-                                synchronized (lock) {
-                                    message1 = myHandler.obtainMessage(PLAYER2_TURN);
-                                    message1.arg1 = msg1.arg1;
-                                    myHandler.sendMessage(message1);
-                                }
-                                break;
-                            }
-                        }
-
-                    }
-                };
-
-                number1 = getRandomNumber();
-                Message message = myHandler.obtainMessage(PLAYER1_SET_NUMBER);
-                message.arg1 = number1;
-                myHandler.sendMessage(message);
-
-                Looper.loop();
-            }
-        });
-
-
+//        player1.start();
+//        player2.start();
 
 
         findViewById(R.id.button).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (player1!=null && player2!=null){
-                    player1.interrupt();
-                    player2.interrupt();
-                    myHandler.removeCallbacksAndMessages(null);
-                    player1Handler.removeCallbacksAndMessages(null);
-                    player2Handler.removeCallbacksAndMessages(null);
-                    player1Handler.getLooper().quitSafely();
-                    player2Handler.getLooper().quitSafely();
-                }
-                player1 = new Thread(new Runnable() {
-                    int number1, currentGuess1;
-                    int turn1 = 0;
-                    @Override
-                    public void run() {
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
+//                if (player1!=null && player2!=null){
+//                    player1.interrupt();
+//                    player2.interrupt();
+//                    myHandler.removeCallbacksAndMessages(null);
+//                    player1Handler.removeCallbacksAndMessages(null);
+//                    player2Handler.removeCallbacksAndMessages(null);
+//                    player1Handler.getLooper().quitSafely();
+//                    player2Handler.getLooper().quitSafely();
+//                }
 
-                        Looper.prepare();
-
-                        player1Handler = new Handler() {
-                            @Override
-                            public void handleMessage(Message msg1) {
-                                Message message1;
-                                switch(msg1.what) {
-                                    case START_GAME: {
-                                        message1 = player2Handler.obtainMessage(NEW_GUESS);
-                                        currentGuess1 = getRandomNumber();
-                                        message1.arg1 = currentGuess1;
-                                        player1Handler.sendMessage(message1);
-                                        break;
-                                    }
-                                    case NEW_GUESS: {
-                                        synchronized (lock) {
-                                            message1 = myHandler.obtainMessage(PLAYER2_TURN);
-                                            message1.arg1 = msg1.arg1;
-                                            myHandler.sendMessage(message1);
-                                        }
-                                        break;
-                                    }
-                                }
-
-                            }
-                        };
-
-                        number1 = getRandomNumber();
-                        Message message = myHandler.obtainMessage(PLAYER1_SET_NUMBER);
-                        message.arg1 = number1;
-                        myHandler.sendMessage(message);
-
-                        Looper.loop();
-                    }
-                });
                 player1.start();
-
-                player2 = new Thread(new Runnable() {
-                    int number2, currentGuess2;
-                    int turn2 = 0;
-                    @Override
-                    public void run() {
-                        try {
-                            Thread.sleep(1000);
-
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-
-                        Looper.prepare();
-
-                        player2Handler = new Handler() {
-                            @Override
-                            public void handleMessage(Message msg2) {
-                                Message message;
-                                switch(msg2.what) {
-                                    case START_GAME: {
-                                        message = player1Handler.obtainMessage(NEW_GUESS);
-                                        currentGuess2 = getRandomNumber();
-                                        message.arg1 = currentGuess2;
-                                        player1Handler.sendMessage(message);
-                                        break;
-                                    }
-                                    case NEW_GUESS: {
-                                        synchronized (lock) {
-                                            message = myHandler.obtainMessage(PLAYER2_TURN);
-                                            message.arg1 = msg2.arg1;
-                                            myHandler.sendMessage(message);
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
-                        };
-
-
-                        number2 = getRandomNumber();
-                        Message message = myHandler.obtainMessage(PLAYER2_SET_NUMBER);
-                        message.arg1 = number2;
-                        myHandler.sendMessage(message);
-
-                        Looper.loop();
-
-                    }
-                });
                 player2.start();
                 myHandler.sendEmptyMessage(START_GAME);
             }
@@ -275,4 +244,5 @@ public class MainActivity extends Activity {
         displayTextField.setText(displayText);
         scrollView.addView(displayTextField);
     }
+
 }
