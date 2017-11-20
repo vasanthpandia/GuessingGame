@@ -14,19 +14,20 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Player's Number" />
+            android:text="Player One's Number"
+            android:textSize="26dp"/>
 
         <TextView
             android:id="@+id/player1_number_field"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="TextView" />
+            android:textSize="26dp"
+            android:text="Not Set" />
 
         <ScrollView
-            android:fillViewport="true"
-            android:scrollbars="vertical"
             android:layout_width="380dp"
-            android:layout_height="345dp">
+            android:layout_height="345dp"
+            android:layout_weight="1">
 
             <LinearLayout
                 android:id="@+id/scroll1_layout"
