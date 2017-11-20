@@ -11,6 +11,9 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.ListAdapter;
+import android.widget.ListView;
 import android.widget.TextView;
 
 
@@ -21,6 +24,7 @@ public class Player1 extends Fragment {
 
     Thread player1;
     Handler player1Handler, mainHandler;
+    public ListView list1;
 
 
     public Player1() {
@@ -33,7 +37,5 @@ public class Player1 extends Fragment {
                              Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_player1, container, false);
     }
-
-
 
 }
